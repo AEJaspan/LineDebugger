@@ -5,6 +5,9 @@ import json
 import os
 import runpy
 import argparse
+import io
+from typing import Generator, Iterator
+
 
 STANDARD_VARS = frozenset([
     "__name__",
@@ -39,8 +42,12 @@ class Debugger:
         print(script_path)
         self.script_path = script_path
         self.execution_log = []
+        self.original_stdout = sys.stdout
+        self.original_stderr = sys.stderr
+        self.output_capture = io.StringIO()
+        self.error_capture = io.StringIO()
 
-    def capture_state(self, frame, line_number):
+    def capture_state(self, frame, line_number, error=None):
         local_vars = remove_standard_vars(frame.f_locals)
         global_vars = remove_standard_vars(frame.f_globals)
         line_content = linecache.getline(self.script_path, line_number).strip()
@@ -52,7 +59,7 @@ class Debugger:
         # Capture surrounding code context
         code_context = self.get_code_context(line_number)
         
-        self.execution_log.append({
+        log_entry = {
             "line_number": line_number,
             "line_content": line_content,
             "local_variables": local_vars,
@@ -60,7 +67,16 @@ class Debugger:
             "function_name": function_name,
             "call_stack": call_stack,
             "code_context": code_context,
-        })
+            "output": self.output_capture.getvalue(),
+            "errors": self.error_capture.getvalue(),
+        }
+        if error:
+            log_entry["__runtime_error"] = {
+                "type": type(error).__name__,
+                "message": str(error),
+                "traceback": traceback.format_exc()
+            }
+        self.execution_log.append(log_entry)
 
     def get_code_context(self, line_number, context_lines=2):
         start_line = max(1, line_number - context_lines)
@@ -93,13 +109,43 @@ class Debugger:
         return self.trace_calls
 
     def run_script(self):
+        # sys.settrace(self.trace_calls)
+        # try:
+        #     runpy.run_path(self.script_path, run_name="__main__")
+        # except Exception:
+        #     traceback.print_exc()
+        # finally:
+        #     sys.settrace(None)
+        # sys.settrace(self.trace_calls)
+        # try:
+        #     runpy.run_path(self.script_path, run_name="__main__")
+        # except Exception as e:
+        #     # Capture the error and its traceback
+        #     exc_type, exc_value, exc_traceback = sys.exc_info()
+        #     for frame, lineno in traceback.walk_tb(exc_traceback):
+        #         if frame.f_code.co_filename == self.script_path:
+        #             self.capture_state(frame, lineno, error=exc_value)
+        # finally:
+        #     sys.settrace(None)
+        # Redirect stdout and stderr
+        sys.stdout = self.output_capture
+        sys.stderr = self.error_capture
+        
         sys.settrace(self.trace_calls)
         try:
             runpy.run_path(self.script_path, run_name="__main__")
-        except Exception:
-            traceback.print_exc()
+        except Exception as e:
+            # Capture the error and its traceback
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            for frame, lineno in traceback.walk_tb(exc_traceback):
+                if frame.f_code.co_filename == self.script_path:
+                    self.capture_state(frame, lineno, error=exc_value)
         finally:
             sys.settrace(None)
+            # Restore original stdout and stderr
+            sys.stdout = self.original_stdout
+            sys.stderr = self.original_stderr
+
 
     def get_log(self):
         return self.execution_log
@@ -112,11 +158,42 @@ class Debugger:
                     f"Call Step {idx + 1}: Line Number {entry['line_number']}: {entry['line_content']}\n"
                 )
                 log_file.write("Local Variables:\n")
-                log_file.write(str(remove_standard_vars(entry["local_variables"])))
+                log_file.write(str(entry["local_variables"]))
                 log_file.write("\n")
                 log_file.write("Global Variables:\n")
-                log_file.write(str(remove_standard_vars(entry["global_variables"])))
+                log_file.write(str(entry["global_variables"]))
                 log_file.write("\n")
+                log_file.write("Output:\n")
+                log_file.write(entry.get("output", "No output") + "\n")
+                log_file.write("Errors:\n")
+                log_file.write(entry.get("errors", "No errors") + "\n")
+                if "__runtime_error" in entry:
+                    log_file.write(f"Error Type: {entry['error']['type']}\n")
+                    log_file.write(f"Error Message: {entry['error']['message']}\n")
+                    log_file.write(f"Traceback:\n{entry['error']['traceback']}\n")
+                log_file.write("\n")
+
+
+    def save_markdown(self, output_path):
+        with open(output_path, "w") as log_file:
+            for idx, entry in enumerate(self.execution_log):
+                log_file.write(f"### Call Step {idx + 1}\n")
+                log_file.write(f"**Line Number**: {entry['line_number']}\n")
+                log_file.write(f"**Line Content**: `{entry['line_content']}`\n\n")
+                log_file.write("**Local Variables**:\n")
+                log_file.write(f"```json\n{json.dumps(entry.get('local_variables', {}), indent=2)}\n```\n\n")
+                log_file.write("**Global Variables**:\n")
+                log_file.write(f"```json\n{json.dumps(entry.get('global_variables', {}), indent=2)}\n```\n\n")
+                log_file.write("**Output**:\n")
+                log_file.write(f"```\n{entry.get('output', 'No output')}\n```\n\n")
+                log_file.write("**Errors**:\n")
+                log_file.write(f"```\n{entry.get('errors', 'No errors')}\n```\n\n")
+                if "error" in entry:
+                    log_file.write(f"**Error Type**: {entry['error']['type']}\n")
+                    log_file.write(f"**Error Message**: {entry['error']['message']}\n")
+                    log_file.write(f"**Traceback**:\n```\n{entry['error']['traceback']}\n```\n\n")
+
+
 
     def save_json(self, output_path):
         with open(output_path, "w") as log_file:
@@ -124,23 +201,22 @@ class Debugger:
 
 class CustomEncoder(json.JSONEncoder):
     def default(self, obj):
-        if callable(obj):  # check if object is a function
-            return str(obj.__name__)  # convert function to its name as a string
-        return super().default(obj)
+        # Convert objects to strings to avoid TypeError
+        return str(obj)
 
 
 def main() -> None:
     """Runs the script."""
     parser = argparse.ArgumentParser(description="Run a Python script with line-by-line debugging.")
     parser.add_argument("-p", "--script_path", default="example_script.py", help="Path to the Python script to debug")
-    parser.add_argument("-o", "--output", default="debug_log.json", help="Path to save the debug log")
+    parser.add_argument("-o", "--output", default="debug_log.md", help="Path to save the debug log")
     args = parser.parse_args()
 
     try:
         # Example usage:
         debugger = Debugger(args.script_path)
         debugger.run_script()
-        debugger.save_json(args.output)
+        debugger.save_markdown(args.output)
         print(f"Debug log saved to {args.output}")
     except Exception as e:
         traceback.print_exc()
