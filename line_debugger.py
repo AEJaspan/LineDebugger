@@ -16,12 +16,10 @@ _PROMPT_TEMPLATE = """
 Given the following stack trace, please explain how to fix the error.
 Stack Trace: {stack_trace}
 """
-USE_GENERATIVE_MODEL = False
+USE_GENERATIVE_MODEL = True
 GPT_MODEL = "gpt-3.5-turbo"
-LLM = openai.AzureOpenAI(
-    deployment_name="gpt-35-turbo",
-    model_name=GPT_MODEL,
-    openai_api_key=os.getenv("OPENAI_API_KEY"),
+CLIENT = openai.OpenAI(
+    api_key=os.getenv("OPENAI_API_KEY"),
 )
 
 
@@ -127,26 +125,31 @@ class Debugger:
             self.capture_state(frame, frame.f_lineno)
         return self.trace_calls
 
-
-
     def explain_errors(self):
+        print("\n\n\n\nExplaining errors...")
         error_message = ""
         for entry in self.execution_log:
             if "__runtime_error" in entry:
-                error_type = entry["error"]["type"]
-                error_message = entry["error"]["message"]
-                error_traceback = entry["error"]["traceback"]
-                error_message = f"Error Type: {error_type}\nError Message: {error_message}\nError Traceback: {error_traceback}"
+                print(entry["code_context"])
+                error_message = entry["code_context"]
+                # error_type = entry["error"]["type"]
+                # error_message = entry["error"]["message"]
+                # error_traceback = entry["error"]["traceback"]
+                # error_message = f"Error Type: {error_type}\nError Message: {error_message}\nError Traceback: {error_traceback}"
                 break
         if error_message == "":
             error_message = "No runtime errors found."
+        print(error_message)
         self.error_explanation = (
-            LLM.complete(_PROMPT_TEMPLATE.format(stack_trace=error_message))
-            .choices[0]
-            .text
+            CLIENT.chat.completions.create(
+                messages=[{'role': 'user', 'content': _PROMPT_TEMPLATE.format(stack_trace=error_message)}],
+                model=GPT_MODEL
+            ).choices[0].message.content
             if USE_GENERATIVE_MODEL
             else error_message
         )
+        print(self.error_explanation)
+
     def run_script(self):
         # sys.settrace(self.trace_calls)
         # try:
@@ -185,7 +188,6 @@ class Debugger:
             sys.stdout = self.original_stdout
             sys.stderr = self.original_stderr
 
-
     def get_log(self):
         return self.execution_log
 
@@ -218,14 +220,14 @@ class Debugger:
                 log_file.write(f"### Call Step {idx + 1}\n")
                 log_file.write(f"**Line Number**: {entry['line_number']}\n")
                 log_file.write(f"**Line Content**: `{entry['line_content']}`\n\n")
-                log_file.write("**Local Variables**:\n")
-                log_file.write(
-                    f"```json\n{json.dumps(entry.get('local_variables', {}), indent=2)}\n```\n\n"
-                )
-                log_file.write("**Global Variables**:\n")
-                log_file.write(
-                    f"```json\n{json.dumps(entry.get('global_variables', {}), indent=2)}\n```\n\n"
-                )
+                # log_file.write("**Local Variables**:\n")
+                # log_file.write(
+                #     f"```json\n{json.dumps(entry.get('local_variables', {}), indent=2)}\n```\n\n"
+                # # )
+                # log_file.write("**Global Variables**:\n")
+                # log_file.write(
+                #     f"```json\n{json.dumps(entry.get('global_variables', {}), indent=2)}\n```\n\n"
+                # )
                 log_file.write("**Output**:\n")
                 log_file.write(f"```\n{entry.get('output', 'No output')}\n```\n\n")
                 log_file.write("**Errors**:\n")
@@ -237,7 +239,9 @@ class Debugger:
                         f"**Traceback**:\n```\n{entry['error']['traceback']}\n```\n\n"
                     )
             log_file.write("\n")
-            log_file.write(f"**Errors Explanation**:\n```\n{self.error_explanation}\n```\n\n")
+            log_file.write(
+                f"**Errors Explanation**:\n```\n{json.dumps(self.error_explanation, indent=2)}\n```\n\n"
+            )
 
     def save_json(self, output_path):
         with open(output_path, "w") as log_file:
