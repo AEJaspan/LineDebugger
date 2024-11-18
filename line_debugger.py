@@ -7,18 +7,37 @@ import runpy
 import argparse
 import io
 from typing import Generator, Iterator
+import openai
+from dotenv import load_dotenv
+
+load_dotenv()
+
+_PROMPT_TEMPLATE = """
+Given the following stack trace, please explain how to fix the error.
+Stack Trace: {stack_trace}
+"""
+USE_GENERATIVE_MODEL = False
+GPT_MODEL = "gpt-3.5-turbo"
+LLM = openai.AzureOpenAI(
+    deployment_name="gpt-35-turbo",
+    model_name=GPT_MODEL,
+    openai_api_key=os.getenv("OPENAI_API_KEY"),
+)
 
 
-STANDARD_VARS = frozenset([
-    "__name__",
-    "__doc__",
-    "__package__",
-    "__loader__",
-    "__spec__",
-    "__file__",
-    "__cached__",
-    "__builtins__",
-])
+STANDARD_VARS = frozenset(
+    [
+        "__name__",
+        "__doc__",
+        "__package__",
+        "__loader__",
+        "__spec__",
+        "__file__",
+        "__cached__",
+        "__builtins__",
+    ]
+)
+
 
 def get_standard_vars() -> frozenset:
     """Returns a set of standard variable names."""
@@ -28,6 +47,7 @@ def get_standard_vars() -> frozenset:
 # def remove_standard_vars(d):
 #     standard_vars = get_standard_vars()
 #     return {k: v for k, v in d.items() if k not in standard_vars}
+
 
 def remove_standard_vars(d):
     standard_vars = get_standard_vars()
@@ -46,19 +66,20 @@ class Debugger:
         self.original_stderr = sys.stderr
         self.output_capture = io.StringIO()
         self.error_capture = io.StringIO()
+        self.error_explanation = ""
 
     def capture_state(self, frame, line_number, error=None):
         local_vars = remove_standard_vars(frame.f_locals)
         global_vars = remove_standard_vars(frame.f_globals)
         line_content = linecache.getline(self.script_path, line_number).strip()
-       
+
         # Capture function name and calling stack
         function_name = frame.f_code.co_name
         call_stack = self.get_call_stack(frame)
-        
+
         # Capture surrounding code context
         code_context = self.get_code_context(line_number)
-        
+
         log_entry = {
             "line_number": line_number,
             "line_content": line_content,
@@ -74,7 +95,7 @@ class Debugger:
             log_entry["__runtime_error"] = {
                 "type": type(error).__name__,
                 "message": str(error),
-                "traceback": traceback.format_exc()
+                "traceback": traceback.format_exc(),
             }
         self.execution_log.append(log_entry)
 
@@ -85,7 +106,6 @@ class Debugger:
         for i in range(start_line, end_line + 1):
             context[i] = linecache.getline(self.script_path, i).strip()
         return context
-
 
     def get_call_stack(self, frame):
         stack = []
@@ -99,7 +119,6 @@ class Debugger:
             frame = frame.f_back
         return stack[::-1]  # Reverse to show the call order from start to current frame
 
-
     def trace_calls(self, frame, event, arg):
         # Only trace calls that belong to the script
         # We check if the filename of the current frame is equal to the absolute path of the script
@@ -108,6 +127,26 @@ class Debugger:
             self.capture_state(frame, frame.f_lineno)
         return self.trace_calls
 
+
+
+    def explain_errors(self):
+        error_message = ""
+        for entry in self.execution_log:
+            if "__runtime_error" in entry:
+                error_type = entry["error"]["type"]
+                error_message = entry["error"]["message"]
+                error_traceback = entry["error"]["traceback"]
+                error_message = f"Error Type: {error_type}\nError Message: {error_message}\nError Traceback: {error_traceback}"
+                break
+        if error_message == "":
+            error_message = "No runtime errors found."
+        self.error_explanation = (
+            LLM.complete(_PROMPT_TEMPLATE.format(stack_trace=error_message))
+            .choices[0]
+            .text
+            if USE_GENERATIVE_MODEL
+            else error_message
+        )
     def run_script(self):
         # sys.settrace(self.trace_calls)
         # try:
@@ -130,7 +169,7 @@ class Debugger:
         # Redirect stdout and stderr
         sys.stdout = self.output_capture
         sys.stderr = self.error_capture
-        
+
         sys.settrace(self.trace_calls)
         try:
             runpy.run_path(self.script_path, run_name="__main__")
@@ -173,7 +212,6 @@ class Debugger:
                     log_file.write(f"Traceback:\n{entry['error']['traceback']}\n")
                 log_file.write("\n")
 
-
     def save_markdown(self, output_path):
         with open(output_path, "w") as log_file:
             for idx, entry in enumerate(self.execution_log):
@@ -181,9 +219,13 @@ class Debugger:
                 log_file.write(f"**Line Number**: {entry['line_number']}\n")
                 log_file.write(f"**Line Content**: `{entry['line_content']}`\n\n")
                 log_file.write("**Local Variables**:\n")
-                log_file.write(f"```json\n{json.dumps(entry.get('local_variables', {}), indent=2)}\n```\n\n")
+                log_file.write(
+                    f"```json\n{json.dumps(entry.get('local_variables', {}), indent=2)}\n```\n\n"
+                )
                 log_file.write("**Global Variables**:\n")
-                log_file.write(f"```json\n{json.dumps(entry.get('global_variables', {}), indent=2)}\n```\n\n")
+                log_file.write(
+                    f"```json\n{json.dumps(entry.get('global_variables', {}), indent=2)}\n```\n\n"
+                )
                 log_file.write("**Output**:\n")
                 log_file.write(f"```\n{entry.get('output', 'No output')}\n```\n\n")
                 log_file.write("**Errors**:\n")
@@ -191,13 +233,16 @@ class Debugger:
                 if "error" in entry:
                     log_file.write(f"**Error Type**: {entry['error']['type']}\n")
                     log_file.write(f"**Error Message**: {entry['error']['message']}\n")
-                    log_file.write(f"**Traceback**:\n```\n{entry['error']['traceback']}\n```\n\n")
-
-
+                    log_file.write(
+                        f"**Traceback**:\n```\n{entry['error']['traceback']}\n```\n\n"
+                    )
+            log_file.write("\n")
+            log_file.write(f"**Errors Explanation**:\n```\n{self.error_explanation}\n```\n\n")
 
     def save_json(self, output_path):
         with open(output_path, "w") as log_file:
             json.dump(self.execution_log, log_file, indent=4, cls=CustomEncoder)
+
 
 class CustomEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -207,20 +252,30 @@ class CustomEncoder(json.JSONEncoder):
 
 def main() -> None:
     """Runs the script."""
-    parser = argparse.ArgumentParser(description="Run a Python script with line-by-line debugging.")
-    parser.add_argument("-p", "--script_path", default="example_script.py", help="Path to the Python script to debug")
-    parser.add_argument("-o", "--output", default="debug_log.md", help="Path to save the debug log")
+    parser = argparse.ArgumentParser(
+        description="Run a Python script with line-by-line debugging."
+    )
+    parser.add_argument(
+        "-p",
+        "--script_path",
+        default="example_script.py",
+        help="Path to the Python script to debug",
+    )
+    parser.add_argument(
+        "-o", "--output", default="debug_log.md", help="Path to save the debug log"
+    )
     args = parser.parse_args()
 
     try:
         # Example usage:
         debugger = Debugger(args.script_path)
         debugger.run_script()
+        debugger.explain_errors()
         debugger.save_markdown(args.output)
         print(f"Debug log saved to {args.output}")
     except Exception as e:
         traceback.print_exc()
 
+
 if __name__ == "__main__":
     main()
-
