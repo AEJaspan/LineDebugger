@@ -31,8 +31,8 @@ Terminal -> Run Build Task
 ## ToDo:
 
 * Add tooling (i.e. internet search)
-* build out a full graph rag system
-* use a qna with sources chain
+* build out a full [graph rag system](https://cookbook.openai.com/examples/rag_with_graph_db)
+* use a [qna with sources chain](https://python.langchain.com/api_reference/langchain/chains/langchain.chains.qa_with_sources.retrieval.RetrievalQAWithSourcesChain.html)
 * build a CLI
 * make it into a decorator
 * register app
