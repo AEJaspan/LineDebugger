@@ -1,6 +1,17 @@
-# LineDebugger
+# RubberDuck
 
 
 ![lint](https://github.com/AEJaspan/LineDebugger/actions/workflows/pylint.yml/badge.svg)
 
 ![ci/cd](https://github.com/AEJaspan/LineDebugger/actions/workflows/python-app.yml/badge.svg)
+
+## ToDo:
+
+* Add tooling (i.e. internet search)
+* build out a full graph rag system
+* use a qna with sources chain
+* build a CLI
+* make it into a decorator
+* register app
+* register on vscode extensions
+* apply for compute credits
