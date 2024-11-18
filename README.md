@@ -13,5 +13,5 @@
 * build a CLI
 * make it into a decorator
 * register app
-* register on vscode extensions
+* register on [vscode extensions](https://code.visualstudio.com/api/ux-guidelines/overview)
 * apply for compute credits
