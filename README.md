@@ -16,10 +16,16 @@ poetry install
 ```
 ### To Run
 
-Use the VS code command to run and build a task. On Windows this
+Use the VS code command to run and build a task. On Windows this is
 
 ```bash
 ctrl + shift + B
+```
+
+Or via the VS code options panel, go:
+
+```
+Terminal -> Run Build Task
 ```
 
 ## ToDo:
