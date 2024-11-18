@@ -5,6 +5,23 @@
 
 ![ci/cd](https://github.com/AEJaspan/LineDebugger/actions/workflows/python-app.yml/badge.svg)
 
+
+## How To
+
+### Setup
+
+```bash
+pip install poetry
+poetry install
+```
+### To Run
+
+Use the VS code command to run and build a task. On Windows this
+
+```bash
+ctrl + shift + B
+```
+
 ## ToDo:
 
 * Add tooling (i.e. internet search)
