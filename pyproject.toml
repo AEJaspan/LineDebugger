@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "linedebugger"
+version = "0.1.0"
+description = ""
+authors = ["AEJaspan <adam.jaspan@googlemail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+neo4j = "^5.26.0"
+weaviate-client = "^4.9.3"
+sentence-transformers = "^3.3.1"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
