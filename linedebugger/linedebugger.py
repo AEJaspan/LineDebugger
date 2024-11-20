@@ -262,7 +262,3 @@ def debug_script(script: str, output: str):
         print(f"Debug log saved to {output}")
     except Exception as e:
         traceback.print_exc()
-
-
-if __name__ == "__main__":
-    main()
