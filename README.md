@@ -14,7 +14,14 @@
 pip install poetry
 poetry install
 ```
+
 ### To Run
+
+```bash
+poetry run linedebugger -s my_script.py -o my_output.md
+```
+
+### To Run in VS code
 
 Use the VS code command to run and build a task. On Windows this is
 

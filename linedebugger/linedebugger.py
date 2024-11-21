@@ -4,9 +4,7 @@ import traceback
 import json
 import os
 import runpy
-import argparse
 import io
-from typing import Generator, Iterator
 import openai
 from dotenv import load_dotenv
 
@@ -254,32 +252,13 @@ class CustomEncoder(json.JSONEncoder):
         return str(obj)
 
 
-def main() -> None:
-    """Runs the script."""
-    parser = argparse.ArgumentParser(
-        description="Run a Python script with line-by-line debugging."
-    )
-    parser.add_argument(
-        "-p",
-        "--script_path",
-        default="example_script.py",
-        help="Path to the Python script to debug",
-    )
-    parser.add_argument(
-        "-o", "--output", default="debug_log.md", help="Path to save the debug log"
-    )
-    args = parser.parse_args()
-
+def debug_script(script: str, output: str):
     try:
         # Example usage:
-        debugger = Debugger(args.script_path)
+        debugger = Debugger(script)
         debugger.run_script()
         debugger.explain_errors()
-        debugger.save_markdown(args.output)
-        print(f"Debug log saved to {args.output}")
+        debugger.save_markdown(output)
+        print(f"Debug log saved to {output}")
     except Exception as e:
         traceback.print_exc()
-
-
-if __name__ == "__main__":
-    main()
