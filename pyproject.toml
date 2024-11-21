@@ -12,6 +12,7 @@ weaviate-client = "^4.9.3"
 sentence-transformers = "^3.3.1"
 python-dotenv = "^1.0.1"
 openai = "^1.54.4"
+pytest-cov = "^2.12.1"
 
 [tool.poetry.scripts]
 linedebugger = "linedebugger.__main__:main"
@@ -19,3 +20,27 @@ linedebugger = "linedebugger.__main__:main"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+#[tool.pytest.ini_options]
+#addopts = [
+#    "--cov=.",
+#    "--cov-report=term-missing",
+#    "--cov-report=html",
+#    "--cov-config=.coveragerc",
+#]
+
+[tool.pylint.main]
+jobs = 4
+output-format = "colorized"
+reports = true
+score = true
+exit-zero = true
+
+[tool.pylint.master]
+jobs = 4
+output-format = "colorized"
+reports = true
+score = true
+exit-zero = true
+
+[tool.pylint.typecheck]
+generated-members = "__*__"
