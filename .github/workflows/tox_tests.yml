@@ -1,0 +1,17 @@
+name: Run Tox
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  run-tox:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Run Tox
+        run: |
+          tox

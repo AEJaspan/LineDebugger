@@ -140,9 +140,16 @@ class Debugger:
         print(error_message)
         self.error_explanation = (
             CLIENT.chat.completions.create(
-                messages=[{'role': 'user', 'content': _PROMPT_TEMPLATE.format(stack_trace=error_message)}],
-                model=GPT_MODEL
-            ).choices[0].message.content
+                messages=[
+                    {
+                        "role": "user",
+                        "content": _PROMPT_TEMPLATE.format(stack_trace=error_message),
+                    }
+                ],
+                model=GPT_MODEL,
+            )
+            .choices[0]
+            .message.content
             if USE_GENERATIVE_MODEL
             else error_message
         )
