@@ -36,3 +36,6 @@ code helloworld
 then run `f5` or the command Debug: Start Debugging from the Command Palette `(Ctrl+Shift+P)` This will compile and run the extension in a new Extension Development Host window.
 
 Run the Hello World command from the Command Palette (Ctrl+Shift+P) in the new window.
+
+
+https://github.com/AEJaspan/Rubberduck
